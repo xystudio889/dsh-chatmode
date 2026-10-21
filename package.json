@@ -1,7 +1,7 @@
 {
   "name": "dsh-chatmode",
-  "version": "0.1.0",
-  "description": "将保留你的Skill，但是模型不会进行任何操作，并且思考也只会一次性生成答案。能做到和网页相似的体验，将会非常节省token。",
+  "version": "0.1.1",
+  "description": "Your skill will be retained, but the model won't take any actions, and it will only generate an answer once. Being able to have an experience similar to a webpage will save a lot of tokens. / 将保留你的Skill，但是模型不会进行任何操作，并且思考也只会一次性生成答案。能做到和网页相似的体验，将会非常节省token。",
   "type": "module",
   "main": "index.js",
   "icon": "./icon.svg",
@@ -16,7 +16,7 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "README.md"
+    "README*.md"
   ],
   "keywords": [
     "dsh",

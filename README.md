@@ -1,83 +1,117 @@
-# dsh-chatmode
+<p align="center">
+  <img src="./icon.svg" width="96" alt="dsh-chatmode icon">
+</p>
 
-DeepSeek Harness 扩展：新增 **聊天模式**（Chat mode）。
+# dsh-chatmode - A web-like minimalist experience
 
-> 将保留你的 Skill，但是模型不会进行任何操作，并且思考也只会一次性生成答案。能做到和网页相似的体验，将会非常节省 token。
+[English](README.md) | 中文
 
-## 这个模式做了什么
+[![npm](https://img.shields.io/npm/v/dsh-chatmode)](https://www.npmjs.com/package/dsh-chatmode)
+[![stars](https://img.shields.io/github/stars/xystudio889/dsh-chatmode?style=flat)](https://github.com/xystudio889/dsh-chatmode)
 
-- **没有任何工具**：模式不挂载任何工具插件（read / write / bash / pwsh / web / todo / subagent / goal / plan 等全部没有），并且会为该模式的作用域隐藏宿主全局挂载的工具。模型拿到的工具 schema 列表为空。
-- **循环自然收敛为一次**：没有工具就没有工具调用轮次，DSH 的 agent loop 在模型第一次回复后即结束本轮（一次思考、一次性生成答案），不会为了操作而继续多步。
-- **Skill 仍然保留**：
-  - 每个会话会收到一次性的技能目录消息（技能名 + 描述，模型可调用范围内的技能），告诉模型它无法自己加载技能。
-  - 用户在输入里写 `/技能名` 时，该技能的完整 `<skill_content>` 正文会在同一步自动注入，模型直接按技能说明作答——不需要 `skill` 工具，也不会产生第二次生成。
-- **精简提示词**：`persona` 使用 `complete: true` 和 `includeRuntimeContext: false`，系统提示只保留聊天模式人设，去掉编码代理、计划模式、工具指引等章节，进一步节省 token。
+A DeepSeek Harness extension that adds a new **Chat mode**.
 
-## 安装
+> **Author's note:** This project was developed entirely by DeepSeek Harness AI, and the code is fully AI-generated. If you find a bug, please report it.
+
+> Your Skills are preserved, but the model won't perform any actions, and a single thinking pass produces the answer. This gives a web-chat-like experience and saves a lot of tokens.
+
+## What this mode does
+
+- **No tools at all**: the mode mounts no tool plugins (read / write / bash / pwsh / web / todo / subagent / goal / plan — none of them), and it hides host-globally-mounted tools within the mode's scope. The tool schema list the model receives is empty.
+- **The loop naturally converges to a single pass**: no tools means no tool-call turns, so DSH's agent loop ends the turn right after the model's first reply (one thinking pass, a single answer). It won't continue for multiple steps just to perform actions.
+- **Skills are still kept**:
+  - Each session receives a one-time skill catalog message (skill name + description, for skills within the model's callable scope) telling the model it cannot load skills by itself.
+  - When the user writes `/skill-name` in the input, that skill's full `<skill_content>` body is injected automatically in the same step, and the model answers directly according to the skill instructions — no `skill` tool needed, and no second generation pass.
+- **Lean prompt**: `persona` uses `complete: true` and `includeRuntimeContext: false`, so the system prompt keeps only the chat-mode persona and drops sections such as the coding agent, plan mode, and tool guidance, saving even more tokens.
+
+## Installation
 
 ```powershell
-# 在 DSH 的 Web UI「插件」页安装本地目录，或：
+# Install the local directory from the DSH Web UI "Plugins" page, or:
 dsh plugin --profile <profile> add F:\code\dsh-plugin\dsh-chatmode
 ```
 
-也可以在任意 DSH profile 的 `cordis.patch.yml` 之外，用 `plugin_manager` 安装本目录（bundle patch 会自动插入模式声明）。
+You can also install this directory with `plugin_manager` in any DSH profile (in addition to `cordis.patch.yml`); the bundle patch inserts the mode declaration automatically.
 
-安装后，在 **设置 → 模式**（或新会话的模式选择器）中即可看到「聊天模式」；新建会话选择它，或对空白会话切换模式。
+Once installed, "聊天模式" (Chat mode) appears in **Settings → Modes** (or in the mode selector of a new session). Select it for a new session, or switch an empty session to it.
 
-## 模式定义
+## Mode definition
 
-`cordis.patch.yml` 向 `@deepseek-ai/dsh-agent-preset` 插入一行声明：
+`cordis.patch.yml` inserts one declaration line into `@deepseek-ai/dsh-agent-preset`:
 
-| 字段 | 值 |
+| Field | Value |
 |---|---|
 | `id` | `chatmode` |
-| 名称 | `聊天模式` |
-| 描述 | 见上 |
-| 组成 | `@deepseek-ai/dsh-persona`（聊天模式人设）+ `dsh-chatmode`（本包的运行时代码） |
+| Name | `聊天模式` |
+| Description | See above |
+| Composition | `@deepseek-ai/dsh-persona` (chat-mode persona) + `dsh-chatmode` (this package's runtime code) |
 
-本包不注册任何工具；运行时代码只做两件事：发布技能目录 / 注入 `/技能名` 正文，以及为该模式作用域隐藏全局工具。
+This package registers no tools; the runtime code does only two things: publish the skill catalog / inject `/skill-name` bodies, and hide global tools within the mode's scope.
 
-## 运行时实现
+## Runtime implementation
 
-`index.js` 导出标准 Cordis 插件（`name` / `inject` / `apply`）：
+`index.js` exports a standard Cordis plugin (`name` / `inject` / `apply`):
 
-- `ctx.inject(['tools'])`：监听 `tools/change`，把当前全局工具名作为 `deny` 列表注册到 `ctx.tools.restrict()`，并随全局工具增减刷新；模式作用域内的工具始终为空。
-- `ctx.inject(['skills', 'workingDirectory'])`：监听 `agent/pre-step`，在接受的步骤上追加一次性技能目录消息与 `/技能名` 注入的技能正文。所有失败都被吞掉并记录警告，不会让一轮对话变成失败轮。
+- `ctx.inject(['tools'])`: listens to `tools/change`, registers the current global tool names as a `deny` list via `ctx.tools.restrict()`, and refreshes as global tools are added or removed; tools inside the mode scope are always empty.
+- `ctx.inject(['skills', 'workingDirectory'])`: listens to `agent/pre-step` and, on accepted steps, appends the one-time skill catalog message and the skill body injected by `/skill-name`. All failures are swallowed and logged as warnings, so they never turn a conversation turn into a failed turn.
 
-不依赖任何 `@deepseek-ai/*` 运行时包（profile 安装的 bundle 无法解析它们）；消息构造、`<skill_content>` 渲染等模型可见格式在本包内自带，与官方 `dsh-tool-skill` / `dsh-skill` 保持一致。
+It depends on no `@deepseek-ai/*` runtime packages (profile-installed bundles cannot resolve them); model-visible formats such as message construction and `<skill_content>` rendering are self-contained in this package and stay consistent with the official `dsh-tool-skill` / `dsh-skill`.
 
-## 显示元数据与语言
+## Display metadata and language
 
-- 插件/设置页的 bundle 标题与描述来自 `locale/*.json`，按软件语言切换：`locale/en.json` 只有英文（`Chat mode` + 英文描述），`locale/zh.json` 只有中文（`聊天模式` + 中文描述）。
-- 模式选择框里的名称与描述来自 `cordis.patch.yml` 的 preset 声明，是宿主侧返回的**单一字符串**，不参与客户端本地化：DSH 客户端的 `presetDisplayText` 只对内置模式（standard / ptc / minimal / cordis）使用本地化词条，自定义模式直接原样显示声明的 `name`/`description`（官方注释：*without making user-authored metadata translatable*）。
-- 因此自定义模式无法做到“中文界面显示中文、英文界面显示英文”。本包按需求把模式名称/描述设为**中文单语**：`name: '聊天模式'`，描述为上面的中文句子。想改成英文单语，直接改 `cordis.patch.yml` 和 `package.json` 的对应文本即可；真正按语言切换需要客户端 UI 插件接管预设选择器，成本较高且易随版本失效。
+- Bundle titles and descriptions on the plugin/settings page come from `locale/*.json` and switch with the software language: `locale/en.json` contains only English (`Chat mode` + English description), and `locale/zh.json` contains only Chinese (`聊天模式` + Chinese description).
+- The name and description in the mode selector come from the preset declaration in `cordis.patch.yml`, which is a **single string** returned by the host and does not participate in client-side localization: DSH client's `presetDisplayText` only uses localized entries for built-in modes (standard / ptc / minimal / cordis), and custom modes display the declared `name`/`description` verbatim (official note: *without making user-authored metadata translatable*).
+- Therefore a custom mode cannot achieve "Chinese UI shows Chinese, English UI shows English". As required, this package sets the mode name/description to **Chinese only**: `name: '聊天模式'`, with the Chinese sentence above as the description. To make it English-only instead, simply change the corresponding text in `cordis.patch.yml` and `package.json`; true per-language switching would require a client UI plugin to take over the preset selector, which is costly and prone to breaking across versions.
 
-## 已验证
+## Verified
 
-安装到当前 desktop profile 后，通过宿主内的临时探针读取了真实运行状态：
+After installing into the current desktop profile, the real runtime state was read through a temporary probe inside the host:
 
-- 模式已进入 roster：`chatmode`（名称、描述、order=5），无 `broken` 诊断。
-- 模式组合已挂载且两行均处于 active 状态：`@deepseek-ai/dsh-persona` + `dsh-chatmode`。
-- 在聊天模式作用域内，可见工具列表为空（全局挂载的 Agent Teams 工具也被隐藏），系统提示只剩聊天模式人设（`complete: true`），可选运行时上下文已关闭。
+- The mode is in the roster: `chatmode` (name, description, order=5), with no `broken` diagnostics.
+- The mode composition is mounted and both rows are active: `@deepseek-ai/dsh-persona` + `dsh-chatmode`.
+- Within the chat-mode scope the visible tool list is empty (globally mounted Agent Teams tools are hidden too), the system prompt contains only the chat-mode persona (`complete: true`), and optional runtime context is disabled.
 
-`/技能名` 注入与目录只发布一次等逻辑由 `test/plugin.test.mjs` 在离线假上下文中覆盖。真正的对话手感（回答是否像网页聊天）仍需在新会话中选择「聊天模式」后由用户确认。
+Logic such as `/skill-name` injection and the catalog being published only once is covered by `test/plugin.test.mjs` in an offline fake context. The actual conversational feel (whether answers feel like web chat) still needs to be confirmed by the user after selecting "聊天模式" in a new session.
 
-## 限制
+## Limitations
 
-- 模型不能自行选择技能：它只能看到技能目录，并由用户用 `/技能名` 触发正文注入。这是「零工具 + 单步生成」约束下的取舍。
-- 从其它模式切换到本模式的已有会话，历史里可能残留旧的技能目录消息（提示模型调用 `skill` 工具）；本模式不会改写历史消息。建议用新会话体验聊天模式。
-- 技能目录在一次会话中只发布一次；会话内技能文件变更后不会自动重发（本模式不挂载压缩/刷新类插件）。
-- 需要宿主已挂载 `skills` 服务与技能提供者（桌面默认组合满足）；缺失时技能目录与 `/技能名` 注入自动跳过，模式仍可正常聊天。
+- The model cannot choose skills on its own: it only sees the skill catalog, and the user triggers body injection with `/skill-name`. This is the trade-off under the "zero tools + single-pass generation" constraint.
+- Existing sessions switched from another mode to this one may still carry old skill-catalog messages in their history (prompting the model to call the `skill` tool); this mode does not rewrite history messages. Starting a new session is recommended to experience chat mode.
+- The skill catalog is published only once per session; changes to skill files within a session are not re-sent automatically (this mode mounts no compaction/refresh plugins).
+- The host must already have the `skills` service and skill providers mounted (the desktop default composition satisfies this); when missing, the skill catalog and `/skill-name` injection are skipped automatically and the mode still chats normally.
 
-## 开发
+## Development
 
 ```powershell
 node --check index.js
 node test/plugin.test.mjs
 ```
 
-`test/plugin.test.mjs` 用假 Cordis 上下文覆盖：不注册工具、隐藏全局工具、目录只发布一次、`/技能名` 注入、`reject` 决策原样返回。
+`test/plugin.test.mjs` uses a fake Cordis context to cover: registering no tools, hiding global tools, publishing the catalog only once, `/skill-name` injection, and returning `reject` decisions unchanged.
 
 ## License
 
-MIT
+This project is licensed under the MIT License; the LICENSE file contains:
+```
+MIT License
+
+Copyright (c) 2026 xystudiocode
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
