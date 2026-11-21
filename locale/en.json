@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Chat mode",
-    "description": "Keeps your Skills, but the model performs no operations and produces its answer in a single pass. It delivers a chat-website-like experience and saves a lot of tokens."
+    "description": "Keeps Skills, adds web search and fetch, and reads @-referenced files and images into context. A Smart search switch in the composer can take both web tools away again at any time, and the mode-picker entry follows the UI language."
   }
 }

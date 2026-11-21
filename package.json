@@ -1,18 +1,23 @@
 {
   "name": "dsh-chatmode",
-  "version": "0.1.1",
-  "description": "Your skill will be retained, but the model won't take any actions, and it will only generate an answer once. Being able to have an experience similar to a webpage will save a lot of tokens. / 将保留你的Skill，但是模型不会进行任何操作，并且思考也只会一次性生成答案。能做到和网页相似的体验，将会非常节省token。",
+  "version": "0.2.5",
+  "description": "Chat mode: keeps Skills, adds web search and fetch behind a Smart search switch, reads @-referenced files and images into context, and localizes its mode-picker entry. / 聊天模式：保留 Skill，新增联网搜索与抓取（输入框「智能搜索」开关可随时关闭），自动注入 @ 引用的文件与图片，并让模式选择框适配中英文。",
   "type": "module",
   "main": "index.js",
+  "scripts": {
+    "test": "node test/plugin.test.mjs && node test/client.test.mjs"
+  },
   "icon": "./icon.svg",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
   "files": [
     "index.js",
+    "client.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
@@ -23,7 +28,8 @@
     "dsh-plugin",
     "deepseek-harness",
     "agent-preset",
-    "chat-mode"
+    "chat-mode",
+    "web-search"
   ],
   "license": "MIT",
   "engines": {
@@ -32,6 +38,15 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale"
+      ]
     }
   }
 }
+

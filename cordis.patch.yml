@@ -1,33 +1,43 @@
 # dsh-chatmode bundle layer.
 #
-# Inserts one agent-preset declaration: the "聊天模式" mode. A
-# session selects it in the mode picker; the mode mounts no tool plugin, so the
-# model has no tool to call and answers each turn with one model step. The
-# `dsh-chatmode` row keeps the Skill catalog as a prompt message and injects a
-# skill body when the user invokes it with `/skill-name`, without exposing any
-# tool.
+# Inserts one agent-preset declaration: the "聊天模式 / Chat mode" mode. A
+# session selects it in the mode picker. The mode mounts only the shared
+# `web_search` / `web_fetch` tools, so the agent loop can take several steps
+# while the model is limited to web research. The `dsh-chatmode` row keeps the
+# Skill catalog as a prompt message, injects a skill body when the user invokes
+# it with `/skill-name`, reads `@`-referenced files into the same step, owns the
+# persona prompt, and carries the per-session "smart search" switch that can
+# take both web tools away again. No other tool is exposed.
+#
+# There is no `dsh-persona` row on purpose: that row contributes a static
+# string, while this mode's prompt has to describe whether the web tools are
+# available right now. A complete persona is the sole prompt section, so the
+# dynamic text cannot be added beside it — the `dsh-chatmode` row registers it.
+#
+# The Host publishes one `name`/`description` string per custom preset, so the
+# declaration carries a bilingual fallback; the package's Client half localizes
+# the mode-picker entry for the active UI language and renders the switch in the
+# composer.
 - insert:
     - id: preset-chatmode
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: chatmode
-        name: '聊天模式'
-        description: '将保留你的Skill，但是模型不会进行任何操作，并且思考也只会一次性生成答案。能做到和网页相似的体验，将会非常节省token。'
+        name: '聊天模式 / Chat mode'
+        description: '保留 Skill，可联网搜索与抓取（可用「智能搜索」开关关闭），自动读取 @ 引用的文件与图片。 / Keeps Skills, adds web search and fetch behind a Smart search switch, and reads @-referenced files and images.'
         order: 5
         plugins:
-          # Lean identity: complete mode makes this the whole system prompt and
-          # drops the coding-agent, plan-mode and tool-guidance sections, so the
-          # token footprint stays close to a web chat.
-          - id: persona
-            name: '@deepseek-ai/dsh-persona'
+          # The only model-facing tools in this mode. The runtime half keeps
+          # every globally mounted tool out of this preset's scope while leaving
+          # these two registrations visible, and hides them per step when the
+          # session's switch is off.
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
             config:
-              complete: true
-              includeRuntimeContext: false
-              prefix: |-
-                You are a helpful assistant in Chat mode. You have no tools at all: you cannot read or write files, run commands, search or fetch the web, use subagents, ask the user structured questions, or perform any other operation. Never claim to have performed an action or to have loaded a skill. If a request needs an action, say briefly that Chat mode cannot perform actions, then answer with what you can.
-                Reply like a website chat assistant: a single direct answer in one message, without narrating tool use, file changes, plans, or next steps.
-                A skill catalog may appear as a system reminder. You cannot load a skill yourself; when the user invokes one with /<skill-name>, its full <skill_content> block is injected into the conversation and you must follow it.
-          # Keeps Skills working without any tool, and guarantees that no
-          # globally mounted tool leaks into this mode.
+              fetch: true
+              searchTimeoutMs: 60000
+          # Keeps Skills working without a skill tool, injects `@` file context,
+          # owns the complete persona prompt, folds `/smartsearch`, and
+          # guarantees that no other globally mounted tool leaks into this mode.
           - id: chatmode
             name: 'dsh-chatmode'
